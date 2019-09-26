@@ -318,7 +318,7 @@
     },
   },
 
-  Deployment(name): $._Object("apps/v1beta1", "Deployment", name) {
+  Deployment(name): $._Object("apps/v1", "Deployment", name) {
     local deployment = self,
 
     spec: {
@@ -385,7 +385,7 @@
     },
   },
 
-  StatefulSet(name): $._Object("apps/v1beta2", "StatefulSet", name) {
+  StatefulSet(name): $._Object("apps/v1", "StatefulSet", name) {
     local sset = self,
 
     spec: {
@@ -465,7 +465,7 @@
     parallelism: 1,
   },
 
-  DaemonSet(name): $._Object("extensions/v1beta1", "DaemonSet", name) {
+  DaemonSet(name): $._Object("apps/v1", "DaemonSet", name) {
     local ds = self,
     spec: {
       updateStrategy: {
