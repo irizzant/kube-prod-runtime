@@ -41,7 +41,7 @@ local utils = import '../lib/utils.libsonnet';
           host: this.host,
           http: {
             paths: [
-              { path: '/oauth2/', backend: $.oauth2_proxy.svc.name_port }
+              { path: '/oauth2/', backend: $.oauth2_proxy.svc.name_port },
             ],
           },
         }],
@@ -59,9 +59,9 @@ local utils = import '../lib/utils.libsonnet';
                 args_+: {
                   'redirect-url': 'http://%s/oauth2/callback' % $.oauth2_proxy.ingress.host,
                   provider: 'gitlab',
-                  'login-url': '$s/oauth/authorize' % gitlabUrl,
-                  'redeem-url': '$s/oauth/token' % gitlabUrl,
-                  'validate-url': '$s/api/v4/user' % gitlabUrl,
+                  'login-url': '%s/oauth/authorize' % gitlabUrl,
+                  'redeem-url': '%s/oauth/token' % gitlabUrl,
+                  'validate-url': '%s/api/v4/user' % gitlabUrl,
                   'oidc-issuer-url': gitlabUrl,
                   'cookie-secure': 'false',
                 },

@@ -23,26 +23,32 @@ local utils = import '../lib/utils.libsonnet';
     es:: $.elasticsearch,
   },
 
-  elasticsearch:: elasticsearch + {
-      sts+: {
-          spec+: {
-              volumeClaimTemplates_+: {
-                data: {storage: "100Mi"},
-              },
-          },
+  elasticsearch:: elasticsearch {
+    sts+: {
+      spec+: {
+        volumeClaimTemplates_+: {
+          data: { storage: '100Mi' },
+        },
       },
-      curator+: {
-          retention:: 1,
-      },
+    },
+    curator+: {
+      retention:: 1,
+    },
   },
 
   kibana:: kibana {
     es:: $.elasticsearch,
   } + {
-    ingress: kube.Ingress($.kibana.p + 'kibana-logging') + $.kibana.metadata {
+    ingress: kube.Ingress($.kibana.p + 'kibana-logging') + $.kibana.metadata + {
       local this = self,
       host:: 'kibana.' + $.external_dns_zone_name,
+      authHost:: 'auth.' + utils.parentDomain(this.host),
       kibanaPath:: '/',
+      metadata+: {
+        annotations+: {
+          'ingress.kubernetes.io/oauth': 'oauth2_proxy',
+        },
+      },
       spec+: {
         rules+: [
           {
@@ -50,6 +56,7 @@ local utils = import '../lib/utils.libsonnet';
             http: {
               paths: [
                 { path: this.kibanaPath, backend: $.kibana.svc.name_port },
+                { path: this.kibanaPath + 'oauth2', backend: $.oauth2_proxy.svc.name_port },
               ],
             },
           },
@@ -58,14 +65,62 @@ local utils = import '../lib/utils.libsonnet';
     },
   },
 
+  config:: {
+    oauthProxy: {
+      client_id: '988946920dd129f611aa',
+      client_secret: '3f5331fdac9c435d59f97a0f50faadc63939d0cf',
+      cookie_secret: '>YA}vM4CPpQ,ge5*vC3s7L3QtjX(wbs<',
+    },
+  },
+
+  oauth2_proxy:: oauth2_proxy {
+    secret+: {
+      data_+: $.config.oauthProxy,
+    },
+
+    ingress+: kube.Ingress($.oauth2_proxy.p + 'oauth2-ingress') + $.oauth2_proxy.metadata {
+      local this = self,
+      host: 'auth.' + $.external_dns_zone_name,
+
+      spec+: {
+        rules+: [{
+          host: this.host,
+          http: {
+            paths: [
+              { path: '/oauth2/', backend: $.oauth2_proxy.svc.name_port },
+            ],
+          },
+        }],
+      },
+    },
+
+
+    deploy+: {
+      spec+: {
+        template+: {
+          spec+: {
+            containers_+: {
+              proxy+: {
+                args_+: {
+                  'redirect-url': '/oauth2/callback',
+                  provider: 'github',
+                  'cookie-secure': 'false',
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+
   local flattener(obj) = std.flattenArrays([
-	if std.objectHas(object, 'apiVersion') then [object] else flattener(object)
-	for object in kube.objectValues(obj)
+    if std.objectHas(object, 'apiVersion') then [object] else flattener(object)
+    for object in kube.objectValues(obj)
   ]),
 
   apiVersion: 'v1',
   kind: 'List',
-  items: flattener($.fluentd_es) + flattener($.elasticsearch) + flattener($.kibana),
+  items: flattener($.fluentd_es) + flattener($.elasticsearch) + flattener($.kibana) + flattener($.oauth2_proxy),
 
 }
-
