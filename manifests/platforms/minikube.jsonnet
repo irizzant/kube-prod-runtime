@@ -114,6 +114,80 @@ local utils = import '../lib/utils.libsonnet';
     },
   },
 
+  grafana:: grafana {
+    prometheus:: $.prometheus.prometheus.svc,
+    ingress+: kube.Ingress($.grafana.p + 'grafana') + $.grafana.metadata {
+      local this = self,
+      host: 'grafana.' + $.external_dns_zone_name,
+      spec+: {
+        rules+: [
+          {
+            host: this.host,
+            http: {
+              paths: [
+                { path: '/', backend: $.grafana.svc.name_port },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  },
+
+  prometheus:: prometheus {
+    retention_days:: 7,
+    ingress+: kube.Ingress($.prometheus.p + 'prometheus') + $.prometheus.metadata {
+      local this = self,
+      host:: 'prometheus.' + $.external_dns_zone_name,
+      prom_path:: '/',
+      am_path:: '/alertmanager',
+      prom_url:: 'http://%s%s' % [this.host, self.prom_path],
+      am_url:: 'http://%s%s' % [this.host, self.am_path],
+      spec+: {
+        rules+: [
+          {
+            host: this.host,
+            http: {
+              paths: [
+                { path: this.prom_path, backend: $.prometheus.prometheus.svc.name_port },
+                { path: this.am_path, backend: $.prometheus.alertmanager.svc.name_port },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    ksm+: {
+      clusterRole+: kube.ClusterRole($.prometheus.p + 'kube-state-metrics') {
+        local core = '',  // workaround empty-string-key bug in `jsonnet fmt`
+        local listwatch = {
+          [core]: ['nodes', 'pods', 'services', 'resourcequotas', 'replicationcontrollers', 'limitranges', 'persistentvolumeclaims', 'namespaces'],
+          apps: ['statefulsets', 'daemonsets', 'deployments', 'replicasets'],
+          batch: ['cronjobs', 'jobs'],
+        },
+        all_resources:: std.set(std.flattenArrays(kube.objectValues(listwatch))),
+        rules: [{
+          apiGroups: [k],
+          resources: listwatch[k],
+          verbs: ['list', 'watch'],
+        } for k in std.objectFields(listwatch)],
+      },
+      deploy+: {
+        spec+: {
+          template+: {
+            spec+: {
+              containers_+: {
+                default+: {
+                  image: 'quay.io/coreos/kube-state-metrics:v1.8.0',
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+
   local flattener(obj) = std.flattenArrays([
     if std.objectHas(object, 'apiVersion') then [object] else flattener(object)
     for object in kube.objectValues(obj)
@@ -121,6 +195,6 @@ local utils = import '../lib/utils.libsonnet';
 
   apiVersion: 'v1',
   kind: 'List',
-  items: flattener($.fluentd_es) + flattener($.elasticsearch) + flattener($.kibana) + flattener($.oauth2_proxy),
+  items: flattener($.fluentd_es) + flattener($.elasticsearch) + flattener($.kibana) + flattener($.oauth2_proxy) + flattener($.grafana) + flattener($.prometheus),
 
 }
