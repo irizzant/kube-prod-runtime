@@ -157,35 +157,6 @@ local utils = import '../lib/utils.libsonnet';
         ],
       },
     },
-    ksm+: {
-      clusterRole+: kube.ClusterRole($.prometheus.p + 'kube-state-metrics') {
-        local core = '',  // workaround empty-string-key bug in `jsonnet fmt`
-        local listwatch = {
-          [core]: ['nodes', 'pods', 'services', 'resourcequotas', 'replicationcontrollers', 'limitranges', 'persistentvolumeclaims', 'namespaces'],
-          apps: ['statefulsets', 'daemonsets', 'deployments', 'replicasets'],
-          batch: ['cronjobs', 'jobs'],
-        },
-        all_resources:: std.set(std.flattenArrays(kube.objectValues(listwatch))),
-        rules: [{
-          apiGroups: [k],
-          resources: listwatch[k],
-          verbs: ['list', 'watch'],
-        } for k in std.objectFields(listwatch)],
-      },
-      deploy+: {
-        spec+: {
-          template+: {
-            spec+: {
-              containers_+: {
-                default+: {
-                  image: 'quay.io/coreos/kube-state-metrics:v1.8.0',
-                },
-              },
-            },
-          },
-        },
-      },
-    },
   },
 
   local flattener(obj) = std.flattenArrays([
