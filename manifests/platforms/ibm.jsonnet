@@ -15,12 +15,37 @@ local utils = import '../lib/utils.libsonnet';
   // Shared metadata for all components
   kubeprod:: kube.Namespace('kubeprod'),
 
-  external_dns_zone_name:: '192.168.99.100.nip.io',
+  external_dns_zone_name:: 'k8sibm.gq',
+
+  letsencrypt_contact_email:: $.config.contactEmail,
+  letsencrypt_environment:: 'prod',
 
   version:: version,
 
   fluentd_es:: fluentd_es {
     es:: $.elasticsearch,
+
+    daemonset+: {
+      spec+: {
+        template+: $.fluentd_es.criticalPod {
+          spec+: {
+            containers_+: {
+              fluentd_es+: {
+
+                volumeMounts_+: {
+
+                },
+
+              },
+            },
+            volumes_+: {
+              varlibdockercontainers: kube.HostPathVolume('/var/log/pods', 'Directory'),
+            },
+          },
+        },
+      },
+    },
+
   },
 
   elasticsearch:: elasticsearch {
@@ -39,89 +64,65 @@ local utils = import '../lib/utils.libsonnet';
   kibana:: kibana {
     es:: $.elasticsearch,
   } + {
-    ingress: kube.Ingress($.kibana.p + 'kibana-logging') + $.kibana.metadata + {
-      local this = self,
-      host:: 'kibana.' + $.external_dns_zone_name,
-      authHost:: 'auth.' + utils.parentDomain(this.host),
-      kibanaPath:: '/',
+    ingress+: {
       metadata+: {
         annotations+: {
-          'ingress.kubernetes.io/oauth': 'oauth2_proxy',
+          'cert-manager.io/issuer': 'letsencrypt-prod',
         },
       },
-      spec+: {
-        rules+: [
-          {
-            host: this.host,
-            http: {
-              paths: [
-                { path: this.kibanaPath, backend: $.kibana.svc.name_port },
-                { path: this.kibanaPath + 'oauth2', backend: $.oauth2_proxy.svc.name_port },
-              ],
-            },
-          },
-        ],
-      },
+      local this = self,
+      host:: 'kibana.' + $.external_dns_zone_name,
+      kibanaPath:: '/',
     },
   },
 
   config:: {
-    oauthProxy: {
-      client_id: '988946920dd129f611aa',
-      client_secret: '3f5331fdac9c435d59f97a0f50faadc63939d0cf',
-      cookie_secret: '>YA}vM4CPpQ,ge5*vC3s7L3QtjX(wbs<',
-    },
+    contactEmail: error 'Provide the contact email',
+    cloudFlareApiKey: error 'Provide the CloudFlare api key',
   },
 
-  oauth2_proxy:: oauth2_proxy {
-    secret+: {
-      data_+: $.config.oauthProxy,
-    },
+  cert_manager:: cert_manager {
+    letsencrypt_contact_email:: $.letsencrypt_contact_email,
+    letsencrypt_environment:: $.letsencrypt_environment,
 
-    ingress+: kube.Ingress($.oauth2_proxy.p + 'oauth2-ingress') + $.oauth2_proxy.metadata {
-      local this = self,
-      host: 'auth.' + $.external_dns_zone_name,
-
-      spec+: {
-        rules+: [{
-          host: this.host,
-          http: {
-            paths: [
-              { path: '/oauth2/', backend: $.oauth2_proxy.svc.name_port },
-            ],
-          },
-        }],
+    cloudFlareSecret: kube.Secret($.cert_manager.p + 'cloudflare-api-key-secret') + $.cert_manager.metadata {
+      data+: {
+        'api-key': std.base64($.config.cloudFlareApiKey),
       },
     },
 
-
-    deploy+: {
+    letsencryptProd+: cert_manager.letsencryptProd {
+      local this = self,
+      metadata+: { name: $.cert_manager.p + 'letsencrypt-prod' },
       spec+: {
-        template+: {
-          spec+: {
-            containers_+: {
-              proxy+: {
-                args_+: {
-                  'redirect-url': '/oauth2/callback',
-                  provider: 'github',
-                  'cookie-secure': 'false',
+        acme+: {
+          email: $.cert_manager.letsencrypt_contact_email,
+          privateKeySecretRef: { name: this.metadata.name },
+          solvers: [
+            {
+              dns01: {
+                cloudflare: {
+                  email: $.cert_manager.letsencrypt_contact_email,
+                  apiKeySecretRef: {
+                    name: 'cloudflare-api-key-secret',
+                    key: 'api-key',
+                  },
                 },
               },
             },
-          },
+          ],
         },
       },
     },
   },
 
-
   local flattener(obj) = std.flattenArrays([
-    if std.objectHas(object, 'apiVersion') then [object] else flattener(object)
+    if std.isArray(object) then object else if std.objectHas(object, 'apiVersion') then [object] else flattener(object)
     for object in kube.objectValues(obj)
   ]),
 
   apiVersion: 'v1',
   kind: 'List',
-  items: flattener($.fluentd_es) + flattener($.elasticsearch) + flattener($.kibana) + flattener($.oauth2_proxy),
+  items: flattener($.fluentd_es) + flattener($.elasticsearch) + flattener($.kibana) + std.sort(flattener($.cert_manager), function(x) if x.kind == 'CustomResourceDefinition' then 0 else 1),
 
 }
