@@ -33,13 +33,17 @@ local utils = import '../lib/utils.libsonnet';
               fluentd_es+: {
 
                 volumeMounts_+: {
-
+                  varlogpods: {
+                    mountPath: '/var/log/pods',
+                    readOnly: true,
+                  },
                 },
 
               },
             },
             volumes_+: {
-              varlibdockercontainers: kube.HostPathVolume('/var/log/pods', 'Directory'),
+              varlibdockercontainers: kube.HostPathVolume('/var/lib/docker/containers', 'DirectoryOrCreate'),
+              varlogpods: kube.HostPathVolume('/var/log/pods', 'Directory'),
             },
           },
         },
