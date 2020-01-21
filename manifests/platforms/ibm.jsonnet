@@ -125,8 +125,10 @@ local utils = import '../lib/utils.libsonnet';
     for object in kube.objectValues(obj)
   ]),
 
+  local sortCrds(arr) = std.sort(arr, function(x) if x.kind == 'CustomResourceDefinition' then 0 else 1),
+
   apiVersion: 'v1',
   kind: 'List',
-  items: flattener($.fluentd_es) + flattener($.elasticsearch) + flattener($.kibana) + std.sort(flattener($.cert_manager), function(x) if x.kind == 'CustomResourceDefinition' then 0 else 1),
+  items: flattener($.fluentd_es) + flattener($.elasticsearch) + flattener($.kibana) + sortCrds(flattener($.cert_manager)),
 
 }
