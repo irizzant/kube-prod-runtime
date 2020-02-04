@@ -18,7 +18,7 @@ local utils = import '../lib/utils.libsonnet';
   external_dns_zone_name:: 'k8sibm.gq',
 
   letsencrypt_contact_email:: $.config.contactEmail,
-  letsencrypt_environment:: 'prod',
+  letsencrypt_environment:: 'staging',
 
   version:: version,
 
@@ -50,13 +50,22 @@ local utils = import '../lib/utils.libsonnet';
       },
     },
 
+    fluentd_es_configd+: {
+      data+: {
+        'system.input.conf': (importstr 'fluentd-es-config-ibm/system.input.conf'),
+      },
+    },
+
   },
 
   elasticsearch:: elasticsearch {
     sts+: {
       spec+: {
         volumeClaimTemplates_+: {
-          data: { storage: '100Mi' },
+          data: {
+            storage: '10Gi',
+            storageClassName: 'rook-ceph-block',
+          },
         },
       },
     },
