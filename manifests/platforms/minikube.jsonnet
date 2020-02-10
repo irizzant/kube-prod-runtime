@@ -10,6 +10,8 @@ local prometheus = import '../components/prometheus.jsonnet';
 local version = import '../components/version.jsonnet';
 local kube = import '../lib/kube.libsonnet';
 local utils = import '../lib/utils.libsonnet';
+local config = import 'config-minikube.jsonnet';
+
 
 {
   // Shared metadata for all components
@@ -65,13 +67,7 @@ local utils = import '../lib/utils.libsonnet';
     },
   },
 
-  config:: {
-    oauthProxy: {
-      client_id: '988946920dd129f611aa',
-      client_secret: '3f5331fdac9c435d59f97a0f50faadc63939d0cf',
-      cookie_secret: '>YA}vM4CPpQ,ge5*vC3s7L3QtjX(wbs<',
-    },
-  },
+  config:: config,
 
   oauth2_proxy:: oauth2_proxy {
     secret+: {

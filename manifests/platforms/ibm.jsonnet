@@ -10,6 +10,7 @@ local prometheus = import '../components/prometheus.jsonnet';
 local version = import '../components/version.jsonnet';
 local kube = import '../lib/kube.libsonnet';
 local utils = import '../lib/utils.libsonnet';
+local config = import 'config-ibm.jsonnet';
 
 {
   // Shared metadata for all components
@@ -89,10 +90,7 @@ local utils = import '../lib/utils.libsonnet';
     },
   },
 
-  config:: {
-    contactEmail: error 'Provide the contact email',
-    cloudFlareApiKey: error 'Provide the CloudFlare api key',
-  },
+  config:: config,
 
   cert_manager:: cert_manager {
     letsencrypt_contact_email:: $.letsencrypt_contact_email,
