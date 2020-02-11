@@ -58,7 +58,7 @@ local config = import 'config-minikube.jsonnet';
       },
     },
   },
-  
+
   config:: config,
 
   local flattener(obj) = std.flattenArrays([
