@@ -12,12 +12,11 @@ local kube = import '../lib/kube.libsonnet';
 local utils = import '../lib/utils.libsonnet';
 local config = import 'config-minikube.jsonnet';
 
-
 {
   // Shared metadata for all components
   kubeprod:: kube.Namespace('kubeprod'),
 
-  external_dns_zone_name:: '192.168.99.100.nip.io',
+  external_dns_zone_name:: '127.0.0.1.nip.io',
 
   version:: version,
 
@@ -44,13 +43,7 @@ local config = import 'config-minikube.jsonnet';
     ingress: kube.Ingress($.kibana.p + 'kibana-logging') + $.kibana.metadata + {
       local this = self,
       host:: 'kibana.' + $.external_dns_zone_name,
-      authHost:: 'auth.' + utils.parentDomain(this.host),
       kibanaPath:: '/',
-      metadata+: {
-        annotations+: {
-          'ingress.kubernetes.io/oauth': 'oauth2_proxy',
-        },
-      },
       spec+: {
         rules+: [
           {
@@ -58,7 +51,6 @@ local config = import 'config-minikube.jsonnet';
             http: {
               paths: [
                 { path: this.kibanaPath, backend: $.kibana.svc.name_port },
-                { path: this.kibanaPath + 'oauth2', backend: $.oauth2_proxy.svc.name_port },
               ],
             },
           },
@@ -66,94 +58,8 @@ local config = import 'config-minikube.jsonnet';
       },
     },
   },
-
+  
   config:: config,
-
-  oauth2_proxy:: oauth2_proxy {
-    secret+: {
-      data_+: $.config.oauthProxy,
-    },
-
-    ingress+: kube.Ingress($.oauth2_proxy.p + 'oauth2-ingress') + $.oauth2_proxy.metadata {
-      local this = self,
-      host: 'auth.' + $.external_dns_zone_name,
-
-      spec+: {
-        rules+: [{
-          host: this.host,
-          http: {
-            paths: [
-              { path: '/oauth2/', backend: $.oauth2_proxy.svc.name_port },
-            ],
-          },
-        }],
-      },
-    },
-
-
-    deploy+: {
-      spec+: {
-        template+: {
-          spec+: {
-            containers_+: {
-              proxy+: {
-                args_+: {
-                  'redirect-url': '/oauth2/callback',
-                  provider: 'github',
-                  'cookie-secure': 'false',
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-  },
-
-  grafana:: grafana {
-    prometheus:: $.prometheus.prometheus.svc,
-    ingress+: kube.Ingress($.grafana.p + 'grafana') + $.grafana.metadata {
-      local this = self,
-      host: 'grafana.' + $.external_dns_zone_name,
-      spec+: {
-        rules+: [
-          {
-            host: this.host,
-            http: {
-              paths: [
-                { path: '/', backend: $.grafana.svc.name_port },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  },
-
-  prometheus:: prometheus {
-    retention_days:: 7,
-    ingress+: kube.Ingress($.prometheus.p + 'prometheus') + $.prometheus.metadata {
-      local this = self,
-      host:: 'prometheus.' + $.external_dns_zone_name,
-      prom_path:: '/',
-      am_path:: '/alertmanager',
-      prom_url:: 'http://%s%s' % [this.host, self.prom_path],
-      am_url:: 'http://%s%s' % [this.host, self.am_path],
-      spec+: {
-        rules+: [
-          {
-            host: this.host,
-            http: {
-              paths: [
-                { path: this.prom_path, backend: $.prometheus.prometheus.svc.name_port },
-                { path: this.am_path, backend: $.prometheus.alertmanager.svc.name_port },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  },
 
   local flattener(obj) = std.flattenArrays([
     if std.objectHas(object, 'apiVersion') then [object] else flattener(object)
@@ -162,6 +68,6 @@ local config = import 'config-minikube.jsonnet';
 
   apiVersion: 'v1',
   kind: 'List',
-  items: flattener($.fluentd_es) + flattener($.elasticsearch) + flattener($.kibana) + flattener($.oauth2_proxy) + flattener($.grafana) + flattener($.prometheus),
+  items: flattener($.fluentd_es) + flattener($.elasticsearch) + flattener($.kibana),
 
 }
