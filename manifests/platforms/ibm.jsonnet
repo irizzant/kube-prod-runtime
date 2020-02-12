@@ -81,7 +81,7 @@ local config = import 'config-ibm.jsonnet';
     ingress+: {
       metadata+: {
         annotations+: {
-          'cert-manager.io/issuer': 'letsencrypt-prod',
+          'cert-manager.io/issuer': 'letsencrypt-staging',
         },
       },
       local this = self,
@@ -105,6 +105,30 @@ local config = import 'config-ibm.jsonnet';
     letsencryptProd+: cert_manager.letsencryptProd {
       local this = self,
       metadata+: { name: $.cert_manager.p + 'letsencrypt-prod' },
+      spec+: {
+        acme+: {
+          email: $.cert_manager.letsencrypt_contact_email,
+          privateKeySecretRef: { name: this.metadata.name },
+          solvers: [
+            {
+              dns01: {
+                cloudflare: {
+                  email: $.cert_manager.letsencrypt_contact_email,
+                  apiKeySecretRef: {
+                    name: 'cloudflare-api-key-secret',
+                    key: 'api-key',
+                  },
+                },
+              },
+            },
+          ],
+        },
+      },
+    },
+    
+    letsencryptStaging+: cert_manager.letsencryptStaging {
+      local this = self,
+      metadata+: { name: $.cert_manager.p + 'letsencrypt-staging' },
       spec+: {
         acme+: {
           email: $.cert_manager.letsencrypt_contact_email,
